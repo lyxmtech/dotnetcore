@@ -1,0 +1,38 @@
+{
+  "family": "dotnetcore-hello",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "hello",
+      "image": "000000000000.dkr.ecr.us-east-1.amazonaws.com/dotnetcore-hello:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8080, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "ASPNETCORE_URLS", "value": "http://+:8080" },
+        { "name": "ASPNETCORE_ENVIRONMENT", "value": "Production" },
+        { "name": "EventBus", "value": "RabbitMQ" },
+        { "name": "Database__Path", "value": "/data/hello.db" },
+        { "name": "RabbitMq__Host", "value": "YOUR_RABBITMQ_HOST" },
+        { "name": "RabbitMq__Port", "value": "5672" },
+        { "name": "RabbitMq__VirtualHost", "value": "/" },
+        { "name": "RabbitMq__Username", "value": "YOUR_RABBITMQ_USERNAME" },
+        { "name": "RabbitMq__Password", "value": "YOUR_RABBITMQ_PASSWORD" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/dotnetcore-hello",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

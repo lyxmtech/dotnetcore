@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\BusCore\BusCore.csproj" />
+    <ProjectReference Include="..\DbCore\DbCore.csproj" />
+    <!--
+      The repositories and schemas live in DataCore, a plain class library.
+      Sharing the code does not share the data: each service still owns its
+      own SQLite file (database per service).
+    -->
+    <ProjectReference Include="..\DataCore\DataCore.csproj" />
+    <!--
+      The consumer and the audit write path live in ServiceCore, a plain class
+      library, so they can be unit tested. Class libraries carry no
+      appsettings*.json, so this reference cannot collide with DemoHost's own
+      configuration files.
+    -->
+    <ProjectReference Include="..\ServiceCore\ServiceCore.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

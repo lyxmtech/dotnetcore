@@ -1,0 +1,33 @@
+{
+  "family": "dotnetcore-demo",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "demo",
+      "image": "000000000000.dkr.ecr.us-east-1.amazonaws.com/dotnetcore-demo:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8080, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "ASPNETCORE_URLS", "value": "http://+:8080" },
+        { "name": "ASPNETCORE_ENVIRONMENT", "value": "Production" },
+        { "name": "EventBus", "value": "InMemory" },
+        { "name": "Database__Path", "value": "/data/demo.db" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/dotnetcore-demo",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
+    <PackageReference Include="MassTransit" Version="8.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ServiceCore holds the *logic* of the demo services (the request handler,
+      the consumers) so it can be unit tested. Like DataCore it is a plain
+      Microsoft.NET.Sdk class library on purpose: a class library ships no
+      appsettings*.json, so referencing it from a Web SDK project (or from the
+      test project) can never trigger the NETSDK1152 duplicate-content error.
+    -->
+    <ProjectReference Include="..\BusCore\BusCore.csproj" />
+    <ProjectReference Include="..\DataCore\DataCore.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,109 @@
+# Credentials for the RabbitMQ broker and for the services that connect to it.
+# Demo credentials only - replace with a real secret (External Secrets, Sealed
+# Secrets, cloud secret manager, ...) before using this outside a sandbox.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-credentials
+  namespace: dotnetcore
+type: Opaque
+stringData:
+  username: dotnetcore
+  password: dotnetcore-rabbit
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: dotnetcore
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+    - name: management
+      port: 15672
+      targetPort: 15672
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: dotnetcore
+  labels:
+    app: rabbitmq
+spec:
+  serviceName: rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3-management
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: username
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: password
+            # Allow the "dotnetcore" user to connect from other pods/hosts.
+            # The default "guest" user is restricted to localhost only.
+            - name: RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS
+              value: "-rabbit loopback_users []"
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_port_listener", "5672"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_port_listener", "5672"]
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 1Gi
+

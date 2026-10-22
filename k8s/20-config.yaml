@@ -1,0 +1,46 @@
+# Shared, non-secret configuration for the event bus.
+# The RabbitMQ host is the StatefulSet's Service DNS name in the same namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eventbus-config
+  namespace: dotnetcore
+data:
+  EventBus: "RabbitMQ"
+  RabbitMq__Host: "rabbitmq"
+  RabbitMq__Port: "5672"
+  RabbitMq__VirtualHost: "/"
+  ASPNETCORE_URLS: "http://+:8080"
+  ASPNETCORE_ENVIRONMENT: "Production"
+---
+# One persistent volume per service that owns a database ("database per service").
+# HelloService keeps hello.db, AuditService keeps audit.db - neither service can
+# reach the other's file, and both survive pod restarts.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hello-data
+  namespace: dotnetcore
+  labels:
+    app: hello
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audit-data
+  namespace: dotnetcore
+  labels:
+    app: audit
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi
+

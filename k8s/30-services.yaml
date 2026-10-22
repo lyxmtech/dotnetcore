@@ -1,0 +1,254 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: dotnetcore
+  labels:
+    app: hello
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+        - name: hello
+          image: dotnetcore-hello:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: eventbus-config
+          env:
+            - name: RabbitMq__Username
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: username
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: password
+            # This service owns hello.db and nothing else.
+            - name: Database__Path
+              value: /data/hello.db
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: hello-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+  namespace: dotnetcore
+  labels:
+    app: hello
+spec:
+  type: NodePort
+  selector:
+    app: hello
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit
+  namespace: dotnetcore
+  labels:
+    app: audit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: audit
+  template:
+    metadata:
+      labels:
+        app: audit
+    spec:
+      containers:
+        - name: audit
+          image: dotnetcore-audit:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: eventbus-config
+          env:
+            - name: RabbitMq__Username
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: username
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: password
+            # This service owns audit.db and nothing else.
+            - name: Database__Path
+              value: /data/audit.db
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: audit-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit
+  namespace: dotnetcore
+  labels:
+    app: audit
+spec:
+  type: ClusterIP
+  selector:
+    app: audit
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notify
+  namespace: dotnetcore
+  labels:
+    app: notify
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notify
+  template:
+    metadata:
+      labels:
+        app: notify
+    spec:
+      containers:
+        - name: notify
+          image: dotnetcore-notify:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: eventbus-config
+          env:
+            - name: RabbitMq__Username
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: username
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: password
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notify
+  namespace: dotnetcore
+  labels:
+    app: notify
+spec:
+  type: ClusterIP
+  selector:
+    app: notify
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

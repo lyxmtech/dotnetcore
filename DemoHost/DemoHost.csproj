@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\BusCore\BusCore.csproj" />
+    <ProjectReference Include="..\DbCore\DbCore.csproj" />
+    <!--
+      DemoHost references DataCore (a plain class library) for the shared
+      repositories and schemas. It deliberately does NOT reference the Web SDK
+      projects: MSBuild's publish step merges the content items of every
+      referenced project into the parent's publish output, so two Web SDK
+      children plus DemoHost itself would all ship appsettings.json and
+      appsettings.Development.json and fail the publish with NETSDK1152
+      ("Duplicate 'appsettings.json' items were included").
+      Class libraries carry no appsettings*.json, so nothing can collide.
+    -->
+    <ProjectReference Include="..\DataCore\DataCore.csproj" />
+    <!--
+      The request and audit logic live in ServiceCore, a plain class library,
+      so it can be unit tested. Class libraries carry no appsettings*.json, so
+      this reference cannot collide with DemoHost's own configuration files.
+    -->
+    <ProjectReference Include="..\ServiceCore\ServiceCore.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
