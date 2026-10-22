@@ -1,0 +1,21 @@
+services:
+  # Option A (default): single process, shared InMemoryEventBus -> fan-out works.
+  # Run: docker compose up -d --build
+  demo:
+    build:
+      context: .
+      dockerfile: ./DemoHost/Dockerfile
+    ports: ["5000:8080"]
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Production
+      - EventBus=InMemory
+      # DemoHost is the single process, so it owns a single demo.db file.
+      - Database__Path=/data/demo.db
+    volumes:
+      # Named volume keeps the SQLite file across restarts.
+      - demo-data:/data
+
+volumes:
+  demo-data:
+

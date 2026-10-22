@@ -1,0 +1,62 @@
+services:
+  # Option B: MassTransit + RabbitMQ across separate containers.
+  # Each service owns its OWN SQLite file - the "database per service" rule.
+  # Run: docker compose -f docker-compose.option-b.yml up -d --build
+  hello:
+    build:
+      context: .
+      dockerfile: ./HelloService/Dockerfile
+    ports: ["5000:8080"]
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Production
+      - EventBus=RabbitMQ
+      - Database__Path=/data/hello.db
+    volumes:
+      - hello-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  audit:
+    build:
+      context: .
+      dockerfile: ./AuditService/Dockerfile
+    ports: ["5001:8080"]
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Production
+      - EventBus=RabbitMQ
+      - Database__Path=/data/audit.db
+    volumes:
+      - audit-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  notify:
+    build:
+      context: .
+      dockerfile: ./NotifyService/Dockerfile
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Production
+      - EventBus=RabbitMQ
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports: ["5672:5672", "15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_listener", "5672"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  hello-data:
+  audit-data:
+

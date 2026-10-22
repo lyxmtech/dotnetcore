@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+.vs/
+.git/
+.tmp-publish/
+*.user
+# SQLite database files created at runtime (one per service)
+**/db/*.db
+**/db/*.db-shm
+**/db/*.db-wal
+
