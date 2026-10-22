@@ -1,4 +1,4 @@
-name: Deploy to Amazon ECS
+name: Deploy services to Amazon ECS
 
 on:
   push:
@@ -10,16 +10,19 @@ permissions:
 
 env:
   AWS_REGION: us-east-1                   # Your AWS region
-  ECR_REPOSITORY: my-app                  # Your ECR repository name
-  ECS_SERVICE: my-app-service             # Your ECS service name
-  ECS_CLUSTER: my-cluster                 # Your ECS cluster name
-  ECS_TASK_DEFINITION: task-definition.json # Path to task definition file
-  CONTAINER_NAME: app-container           # Container name in task definition
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Build & Deploy ${{ matrix.service.display }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - { display: DemoHost,     project: DemoHost,     dockerfile: DemoHost/Dockerfile,     ecr_repository: dotnetcore-demo,   ecs_service: dotnetcore-demo-service,   container_name: demo,   task_definition: aws/task-definitions/demo.json }
+          - { display: HelloService, project: HelloService, dockerfile: HelloService/Dockerfile, ecr_repository: dotnetcore-hello,  ecs_service: dotnetcore-hello-service,  container_name: hello,  task_definition: aws/task-definitions/hello.json }
+          - { display: AuditService, project: AuditService, dockerfile: AuditService/Dockerfile, ecr_repository: dotnetcore-audit,  ecs_service: dotnetcore-audit-service,  container_name: audit,  task_definition: aws/task-definitions/audit.json }
+          - { display: NotifyService, project: NotifyService, dockerfile: NotifyService/Dockerfile, ecr_repository: dotnetcore-notify, ecs_service: dotnetcore-notify-service, container_name: notify, task_definition: aws/task-definitions/notify.json }
     environment: production # Optional: if you have configured a GitHub environment
 
     steps:
@@ -41,8 +44,9 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+          ECR_REPOSITORY: ${{ matrix.service.ecr_repository }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -f ${{ matrix.service.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
@@ -50,14 +54,14 @@ jobs:
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ${{ env.ECS_TASK_DEFINITION }}
-          container-name: ${{ env.CONTAINER_NAME }}
+          task-definition: ${{ matrix.service.task_definition }}
+          container-name: ${{ matrix.service.container_name }}
           image: ${{ steps.build-image.outputs.image }}
 
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
+          service: ${{ matrix.service.ecs_service }}
+          cluster: dotnetcore-cluster
           wait-for-service-stability: true
