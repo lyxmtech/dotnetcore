@@ -1,7 +1,7 @@
 name: Deploy services to Amazon ECS
 
 on:
-  workflow_dispatch:       # Allow manual runs from the GitHub Actions tab
+  workflow_dispatch:       # Manual runs from the GitHub Actions tab
     inputs:
       service:
         description: 'Service to deploy (all = every service)'
@@ -23,38 +23,56 @@ env:
   AWS_REGION: us-east-1                   # Your AWS region
 
 jobs:
+  prepare:
+    name: Prepare deploy matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Compute matrix from input
+        id: set-matrix
+        env:
+          INPUT_SERVICE: ${{ github.event.inputs.service }}
+        run: |
+          python3 <<'PY'
+          import json, os
+          svc = (os.environ.get("INPUT_SERVICE") or "all").strip().lower()
+          slugs = [svc] if svc in ("demo", "hello", "audit", "notify") else ["demo", "hello", "audit", "notify"]
+          services = {
+            "demo":   {"slug":"demo",   "display":"DemoHost",     "project":"DemoHost",     "dockerfile":"DemoHost/Dockerfile",     "ecr_repository":"dotnetcore-demo",   "ecs_service":"dotnetcore-demo-service",   "container_name":"demo",   "task_definition":"aws/task-definitions/demo.json"},
+            "hello":  {"slug":"hello",  "display":"HelloService", "project":"HelloService", "dockerfile":"HelloService/Dockerfile", "ecr_repository":"dotnetcore-hello",  "ecs_service":"dotnetcore-hello-service",  "container_name":"hello",  "task_definition":"aws/task-definitions/hello.json"},
+            "audit":  {"slug":"audit",  "display":"AuditService", "project":"AuditService", "dockerfile":"AuditService/Dockerfile", "ecr_repository":"dotnetcore-audit",  "ecs_service":"dotnetcore-audit-service",  "container_name":"audit",  "task_definition":"aws/task-definitions/audit.json"},
+            "notify": {"slug":"notify", "display":"NotifyService","project":"NotifyService","dockerfile":"NotifyService/Dockerfile","ecr_repository":"dotnetcore-notify","ecs_service":"dotnetcore-notify-service","container_name":"notify","task_definition":"aws/task-definitions/notify.json"},
+          }
+          matrix = {"service": [services[s] for s in slugs]}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("matrix=" + json.dumps(matrix) + "\n")
+          PY
+
   deploy:
     name: Build & Deploy ${{ matrix.service.display }}
     runs-on: ubuntu-latest
+    needs: prepare
     strategy:
       fail-fast: false
-      matrix:
-        service:
-          - { slug: demo,    display: DemoHost,     project: DemoHost,     dockerfile: DemoHost/Dockerfile,     ecr_repository: dotnetcore-demo,   ecs_service: dotnetcore-demo-service,   container_name: demo,   task_definition: aws/task-definitions/demo.json }
-          - { slug: hello,   display: HelloService, project: HelloService, dockerfile: HelloService/Dockerfile, ecr_repository: dotnetcore-hello,  ecs_service: dotnetcore-hello-service,  container_name: hello,  task_definition: aws/task-definitions/hello.json }
-          - { slug: audit,   display: AuditService, project: AuditService, dockerfile: AuditService/Dockerfile, ecr_repository: dotnetcore-audit,  ecs_service: dotnetcore-audit-service,  container_name: audit,  task_definition: aws/task-definitions/audit.json }
-          - { slug: notify,  display: NotifyService, project: NotifyService, dockerfile: NotifyService/Dockerfile, ecr_repository: dotnetcore-notify, ecs_service: dotnetcore-notify-service, container_name: notify, task_definition: aws/task-definitions/notify.json }
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     environment: production # Optional: if you have configured a GitHub environment
 
     steps:
       - name: Checkout Code
-        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials (OIDC)
-        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsECSRole # Replace with your IAM role ARN
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag, and Push Image to ECR
-        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -66,7 +84,6 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Fill in the new image ID in the Amazon ECS task definition
-        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
@@ -75,10 +92,12 @@ jobs:
           image: ${{ steps.build-image.outputs.image }}
 
       - name: Deploy Amazon ECS task definition
-        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ matrix.service.ecs_service }}
+          cluster: dotnetcore-cluster
+          wait-for-service-stability: true
+
           cluster: dotnetcore-cluster
           wait-for-service-stability: true
