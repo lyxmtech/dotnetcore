@@ -35,23 +35,26 @@ jobs:
           - { slug: audit,   display: AuditService, project: AuditService, dockerfile: AuditService/Dockerfile, ecr_repository: dotnetcore-audit,  ecs_service: dotnetcore-audit-service,  container_name: audit,  task_definition: aws/task-definitions/audit.json }
           - { slug: notify,  display: NotifyService, project: NotifyService, dockerfile: NotifyService/Dockerfile, ecr_repository: dotnetcore-notify, ecs_service: dotnetcore-notify-service, container_name: notify, task_definition: aws/task-definitions/notify.json }
     environment: production # Optional: if you have configured a GitHub environment
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
 
     steps:
       - name: Checkout Code
+        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials (OIDC)
+        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsECSRole # Replace with your IAM role ARN
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag, and Push Image to ECR
+        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -63,6 +66,7 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Fill in the new image ID in the Amazon ECS task definition
+        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
@@ -71,6 +75,7 @@ jobs:
           image: ${{ steps.build-image.outputs.image }}
 
       - name: Deploy Amazon ECS task definition
+        if: ${{ !github.event.inputs.service || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service.slug }}
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
