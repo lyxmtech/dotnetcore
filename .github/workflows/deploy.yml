@@ -1,7 +1,7 @@
 name: Deploy services to Amazon ECS
 
 on:
-  workflow_dispatch:       # Manual runs from the GitHub Actions tab
+  workflow_dispatch:
     inputs:
       service:
         description: 'Service to deploy (all = every service)'
@@ -16,11 +16,12 @@ on:
           - notify
 
 permissions:
-  id-token: write # Required for OIDC authentication
-  contents: read  # Required for checkout code
+  id-token: write
+  contents: read
 
 env:
-  AWS_REGION: us-east-1                   # Your AWS region
+  AWS_REGION: us-east-1
+  ECS_CLUSTER: dotnetcore-cluster   # moved here from hardcoded step
 
 jobs:
   prepare:
@@ -56,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-    environment: production # Optional: if you have configured a GitHub environment
+    # environment: production   # uncomment ONLY if you created this env in repo settings
 
     steps:
       - name: Checkout Code
@@ -65,7 +66,7 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsECSRole # Replace with your IAM role ARN
+          role-to-assume: arn:aws:iam::446453290297:role/GitHubActionsECSRole  # ⚠️ REPLACE
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -96,8 +97,5 @@ jobs:
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ matrix.service.ecs_service }}
-          cluster: dotnetcore-cluster
-          wait-for-service-stability: true
-
-          cluster: dotnetcore-cluster
+          cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
