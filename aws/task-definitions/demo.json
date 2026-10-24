@@ -5,7 +5,7 @@
   "cpu": "256",
   "memory": "512",
   "executionRoleArn": "arn:aws:iam::446453290297:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskRole",
+  "taskRoleArn": "arn:aws:iam::446453290297:role/ecsTaskRole",
   "containerDefinitions": [
     {
       "name": "demo",
