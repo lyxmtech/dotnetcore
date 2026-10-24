@@ -25,7 +25,8 @@
         "options": {
           "awslogs-group": "/ecs/dotnetcore-demo",
           "awslogs-region": "us-east-2",
-          "awslogs-stream-prefix": "ecs"
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
         }
       }
     }
