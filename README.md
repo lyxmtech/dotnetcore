@@ -45,11 +45,16 @@ can collide.
 `BusCore` owns the `EventBus` flag in exactly one place (`EventBusSetup.AddEventBus`):
 - `EventBus=InMemory` → `InMemoryEventBus` (no broker)
 - `EventBus=RabbitMQ` → `RabbitMqEventBus` (MassTransit + RabbitMQ)
+- `EventBus=SQS` → `SqsEventBus` (MassTransit + Amazon SQS/SNS; AWS in production, LocalStack for local testing)
 
 The RabbitMQ broker location comes from the `RabbitMq` configuration section
 (`RabbitMq__Host`, `RabbitMq__Port`, `RabbitMq__Username`, `RabbitMq__Password`,
 `RabbitMq__VirtualHost`), so the same image runs under Docker Compose and
 Kubernetes without a rebuild.
+
+The SQS settings come from the `Sqs` section (`Sqs__Region`, plus `Sqs__ServiceUrl`,
+`Sqs__AccessKey`, `Sqs__SecretKey` for LocalStack). In AWS, leave ServiceUrl empty
+and let the default credential chain (ECS task role) authenticate.
 
 ## Option A — in-process fan-out
 
@@ -185,6 +190,21 @@ Queue names match the Compose run: `audit-audit` and `notify-notify`.
 Note: NodePorts are not reachable from the Windows host on Docker Desktop
 (the node IPs live inside Docker's network). Use `kubectl port-forward` as shown
 above.
+
+## Option C — MassTransit + Amazon SQS/SNS (LocalStack locally)
+
+```powershell
+docker compose -f docker-compose.sqs.yml up -d --build
+curl "http://localhost:5000/hello?name=Alice"
+
+# verify both consumers received the event
+docker logs dotnetcore-audit-1  | Select-String AUDIT
+docker logs dotnetcore-notify-1 | Select-String NOTIFY
+```
+
+In AWS the task definitions set `EventBus=SQS` and `Sqs__Region=us-east-2` only;
+credentials come from the ECS task role (needs `sqs:*` and `sns:*` on the
+resources MassTransit creates).
 
 ## Per-service processes without a broker (shows the limitation)
 
