@@ -14,6 +14,8 @@ builder.Services.AddEventBus(builder.Configuration);
 // the service can also run standalone (EventBus=InMemory) without a broker.
 if (EventBusSetup.ResolveMode(builder.Configuration) == EventBusMode.RabbitMq)
     builder.Services.AddRabbitMqBus(builder.Configuration, "hello");
+else if (EventBusSetup.ResolveMode(builder.Configuration) == EventBusMode.Sqs)
+    builder.Services.AddAmazonSqsBus(builder.Configuration, "hello");
 
 // HelloService owns its own database file (database per service).
 // The schema is created at startup; the file path comes from "Database__Path".

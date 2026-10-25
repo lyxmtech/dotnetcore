@@ -12,6 +12,8 @@ builder.Services.AddEventBus(builder.Configuration);
 // the service can also run standalone (EventBus=InMemory) without a broker.
 if (EventBusSetup.ResolveMode(builder.Configuration) == EventBusMode.RabbitMq)
     builder.Services.AddRabbitMqBus(builder.Configuration, "notify", x => x.AddConsumer<NotifyConsumer>());
+else if (EventBusSetup.ResolveMode(builder.Configuration) == EventBusMode.Sqs)
+    builder.Services.AddAmazonSqsBus(builder.Configuration, "notify", x => x.AddConsumer<NotifyConsumer>());
 
 var app = builder.Build();
 
