@@ -9,7 +9,7 @@
   "containerDefinitions": [
     {
       "name": "hello",
-      "image": "000000000000.dkr.ecr.us-east-1.amazonaws.com/dotnetcore-hello:latest",
+      "image": "000000000000.dkr.ecr.us-east-2.amazonaws.com/dotnetcore-hello:latest",
       "essential": true,
       "portMappings": [
         { "containerPort": 8080, "protocol": "tcp" }
@@ -17,20 +17,17 @@
       "environment": [
         { "name": "ASPNETCORE_URLS", "value": "http://+:8080" },
         { "name": "ASPNETCORE_ENVIRONMENT", "value": "Production" },
-        { "name": "EventBus", "value": "RabbitMQ" },
+        { "name": "EventBus", "value": "SQS" },
         { "name": "Database__Path", "value": "/data/hello.db" },
-        { "name": "RabbitMq__Host", "value": "YOUR_RABBITMQ_HOST" },
-        { "name": "RabbitMq__Port", "value": "5672" },
-        { "name": "RabbitMq__VirtualHost", "value": "/" },
-        { "name": "RabbitMq__Username", "value": "YOUR_RABBITMQ_USERNAME" },
-        { "name": "RabbitMq__Password", "value": "YOUR_RABBITMQ_PASSWORD" }
+        { "name": "Sqs__Region", "value": "us-east-2" }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
           "awslogs-group": "/ecs/dotnetcore-hello",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "ecs"
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
         }
       }
     }

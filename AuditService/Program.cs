@@ -14,11 +14,14 @@ builder.Services.AddEventBus(builder.Configuration);
 // the service can also run standalone (EventBus=InMemory) without a broker.
 if (EventBusSetup.ResolveMode(builder.Configuration) == EventBusMode.RabbitMq)
     builder.Services.AddRabbitMqBus(builder.Configuration, "audit", x => x.AddConsumer<AuditConsumer>());
+else if (EventBusSetup.ResolveMode(builder.Configuration) == EventBusMode.Sqs)
+    builder.Services.AddAmazonSqsBus(builder.Configuration, "audit", x => x.AddConsumer<AuditConsumer>());
 
 // AuditService owns its own database file (database per service).
 // The schema is created at startup; the file path comes from "Database__Path".
 builder.Services.AddSqliteDatabase(builder.Configuration, AuditSchema.Statements);
 builder.Services.AddSingleton<AuditRepository>();
+builder.Services.AddSingleton<AuditServiceCore>();
 
 var app = builder.Build();
 

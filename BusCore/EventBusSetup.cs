@@ -1,6 +1,9 @@
+using Amazon.SimpleNotificationService;
+using Amazon.SQS;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 
 namespace Contracts;
 
@@ -49,6 +52,62 @@ public static class MassTransitSetup
 
         return services;
     }
+
+    /// <summary>
+    /// Registers a single MassTransit bus using Amazon SQS/SNS. In AWS the endpoint
+    /// and credentials come from the default credential chain (IAM task role); for
+    /// local testing against LocalStack set Sqs__ServiceUrl (and optionally
+    /// Sqs__AccessKey/Sqs__SecretKey).
+    /// </summary>
+    public static IServiceCollection AddAmazonSqsBus(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        string endpointPrefix,
+        Action<IBusRegistrationConfigurator>? configureBus = null)
+    {
+        var options = configuration.GetSection(SqsOptions.SectionName).Get<SqsOptions>() ?? new SqsOptions();
+
+        services.AddMassTransit(x =>
+        {
+            x.UsingAmazonSqs((ctx, cfg) =>
+            {
+                if (!string.IsNullOrWhiteSpace(options.ServiceUrl))
+                {
+                    var serviceUri = new Uri(options.ServiceUrl);
+                    var hostUri = new Uri($"amazonsqs://{serviceUri.Host}:{serviceUri.Port}");
+                    cfg.Host(hostUri, h =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(options.AccessKey)) h.AccessKey(options.AccessKey);
+                        if (!string.IsNullOrWhiteSpace(options.SecretKey)) h.SecretKey(options.SecretKey);
+                        h.Config(new AmazonSQSConfig
+                        {
+                            ServiceURL = options.ServiceUrl,
+                            AuthenticationRegion = options.Region
+                        });
+                        h.Config(new AmazonSimpleNotificationServiceConfig
+                        {
+                            ServiceURL = options.ServiceUrl,
+                            AuthenticationRegion = options.Region
+                        });
+                    });
+                }
+                else
+                {
+                    cfg.Host(options.Region, h =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(options.AccessKey)) h.AccessKey(options.AccessKey);
+                        if (!string.IsNullOrWhiteSpace(options.SecretKey)) h.SecretKey(options.SecretKey);
+                    });
+                }
+
+                cfg.ConfigureEndpoints(ctx, new KebabCaseEndpointNameFormatter(endpointPrefix, false));
+            });
+
+            configureBus?.Invoke(x);
+        });
+
+        return services;
+    }
 }
 
 public static class EventBusSetup
@@ -63,6 +122,8 @@ public static class EventBusSetup
         var mode = ResolveMode(configuration);
         if (mode == EventBusMode.RabbitMq)
             services.AddSingleton<IEventBus, RabbitMqEventBus>();
+        else if (mode == EventBusMode.Sqs)
+            services.AddSingleton<IEventBus, SqsEventBus>();
         else
             services.AddSingleton<IEventBus, InMemoryEventBus>();
         return services;
@@ -71,16 +132,19 @@ public static class EventBusSetup
     public static EventBusMode ResolveMode(IConfiguration configuration)
     {
         var raw = configuration["EventBus"]?.Trim();
-        return string.Equals(raw, "RabbitMQ", StringComparison.OrdinalIgnoreCase)
-            ? EventBusMode.RabbitMq
-            : EventBusMode.InMemory;
+        if (string.Equals(raw, "SQS", StringComparison.OrdinalIgnoreCase))
+            return EventBusMode.Sqs;
+        if (string.Equals(raw, "RabbitMQ", StringComparison.OrdinalIgnoreCase))
+            return EventBusMode.RabbitMq;
+        return EventBusMode.InMemory;
     }
 }
 
 public enum EventBusMode
 {
     InMemory,
-    RabbitMq
+    RabbitMq,
+    Sqs
 }
 
 /// <summary>
@@ -99,6 +163,6 @@ public static class EventBusExtensions
         }
 
         throw new NotSupportedException(
-            "Subscribe is only supported by the in-memory bus. With RabbitMQ, register an IConsumer<T> via x.AddConsumer<T>().");
+            "Subscribe is only supported by the in-memory bus. With RabbitMQ or SQS, register an IConsumer<T> via x.AddConsumer<T>().");
     }
 }
