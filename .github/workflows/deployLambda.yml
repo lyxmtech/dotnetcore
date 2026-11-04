@@ -98,10 +98,10 @@ jobs:
       # -------------------------------------------------
       - name: Deploy Lambda zip
         run: |
-          aws lambda update-function-code '
-            --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" '
-            --zip-file fileb://AuditLambda.zip '
-            --publish   # create a new version; remove if you don't want auto‑versioning
+              aws lambda update-function-code `
+                --function-name "AuditAuditCount" `
+                --zip-file fileb://AuditLambda.zip `
+                --publish
 
       # -------------------------------------------------
       # 1️⃣1️⃣ (Optional) Set / update the env var that tells the function
@@ -110,8 +110,8 @@ jobs:
       - name: Set AUDIT_DB_PATH env var (optional)
         if: env.PACKAGE_DB == 'false'                # only run when DB is *not* zipped
         run: |
-          aws lambda update-function-configuration '
-            --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" '
+          aws lambda update-function-configuration `
+            --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" `
             --environment "Variables={AUDIT_DB_PATH=/tmp/audit.db}"
           # The above sets the variable so the Lambda looks for audit.db inside /tmp.
           # If you store the DB in EFS, S3, or another location, adjust the path accordingly.
@@ -125,8 +125,8 @@ jobs:
         run: |
           aws s3 cp publish/audit.db s3://my-lambda-bucket/audit.db --sse aws:kms
           # Then in the previous step set the env var to that S3 path, e.g.
-          # aws lambda update-function-configuration '
-          #   --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" '
+          # aws lambda update-function-configuration `
+          #   --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" `
           #   --environment "Variables={AUDIT_DB_PATH=/opt/audit.db}"
           # (You would later mount the EFS or use a side‑car that copies from S3 to /opt)
 
