@@ -2,131 +2,74 @@ name: Deploy AuditLambda
 
 on:
   push:
-    branches: [ main ]          # run on pushes to main (or change to your branch)
-  workflow_dispatch: {}        # allow manual runs from the UI
+    branches: [main]
+    paths:
+      - "AuditLambda/**"
+      - ".github/workflows/deployLambda.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: audit-lambda-deploy
+  cancel-in-progress: false
 
 env:
-  # -------------------------------------------------
-  # These can be overridden per‑run via secrets or UI
-  # -------------------------------------------------
-  DOTNET_VERSION: '10.0.x'      # .NET SDK version
-  LAMBDA_FUNCTION_NAME: 'AuditAuditCount'   # name of the Lambda you created in AWS
-  LAMBDA_RUNTIME: 'dotnet10'          # tells AWS the function is .NET 9 (custom runtime)
-  # Path (relative to repo root) where the published dll lives
-  PROJECT_PATH: './AuditLambda'   # <-- adjust if you rename the folder
-  # If you want the SQLite file packaged with the function, set this to true
-  PACKAGE_DB: 'false'                # set to 'true' if you want audit.db in the zip
+  DOTNET_VERSION: "10.0.x"
+  LAMBDA_FUNCTION_NAME: AuditAuditCount
+  LAMBDA_RUNTIME: dotnet10
+  LAMBDA_HANDLER: AuditLambda::AuditLambda.Function::FunctionHandlerAsync
+  PROJECT_PATH: AuditLambda/AuditLambda.csproj
 
 jobs:
   build-and-deploy:
-    runs-on: windows-latest       # Windows runners work fine for .NET 9
+    runs-on: ubuntu-latest
 
     steps:
-      # -------------------------------------------------
-      # 1️⃣ Checkout code
-      # -------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -------------------------------------------------
-      # 2️⃣ Set up .NET SDK
-      # -------------------------------------------------
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # -------------------------------------------------
-      # 3️⃣ Install NuGet packages (restore)
-      # -------------------------------------------------
       - name: Restore packages
-        run: dotnet restore "${{ env.PROJECT_PATH }}"
+        run: dotnet restore "${{ env.PROJECT_PATH }}" --runtime linux-x64
 
-      # -------------------------------------------------
-      # 4️⃣ Build in Release mode
-      # -------------------------------------------------
       - name: Build Release
-        run: dotnet build "${{ env.PROJECT_PATH }}" -c Release --no-restore
+        run: dotnet build "${{ env.PROJECT_PATH }}" -c Release --runtime linux-x64 --no-restore
 
-      # -------------------------------------------------
-      # 5️⃣ Publish (output to a known folder)
-      # -------------------------------------------------
-      - name: Publish dll
-        run: |
-          dotnet publish "${{ env.PROJECT_PATH }}" -c Release -o publish --self-contained false -r linux-x64
-          # If you want a Windows‑native binary replace `linux-x64` with `win-x64`
+      - name: Publish Lambda package
+        run: dotnet publish "${{ env.PROJECT_PATH }}" -c Release --runtime linux-x64 --self-contained false --no-build --no-restore -o publish
 
-      # -------------------------------------------------
-      # 6️⃣ (Optional) Package the SQLite database file
-      # -------------------------------------------------
-      - name: Package audit.db if requested
-        if: env.PACKAGE_DB == 'true'
-        run: |
-          # Assume the existing AuditService already has audit.db next to the source.
-          # Adjust the path if your DB lives elsewhere.
-          if exist ..\AuditService\db\audit.db copy ..\AuditService\db\audit.db publish\audit.db
-          # If the file does not exist the Lambda will create it on first run (see Function.cs)
-
-      # -------------------------------------------------
-      # 7️⃣ Zip the publish output (Lambda expects a .zip)
-      # -------------------------------------------------
       - name: Create deployment zip
         run: |
-          Compress-Archive -Path ./publish/* -DestinationPath ./AuditLambda.zip -Force
+          cd publish
+          zip -r ../AuditLambda.zip .
 
-      # -------------------------------------------------
-      # 8️⃣ Upload the zip as a workflow artifact (optional, for debugging)
-      # -------------------------------------------------
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: AuditLambda-deploy-zip
           path: AuditLambda.zip
 
-      # -------------------------------------------------
-      # 9️⃣ Configure AWS credentials (use GitHub Secrets)
-      # -------------------------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
-      # -------------------------------------------------
-      # 🔟 Update the Lambda function code
-      # -------------------------------------------------
+      - name: Wait for existing Lambda update
+        run: aws lambda wait function-updated --function-name "${{ env.LAMBDA_FUNCTION_NAME }}"
+
+      - name: Configure Lambda runtime and handler
+        run: aws lambda update-function-configuration --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" --runtime "${{ env.LAMBDA_RUNTIME }}" --handler "${{ env.LAMBDA_HANDLER }}"
+
+      - name: Wait for Lambda configuration update
+        run: aws lambda wait function-updated --function-name "${{ env.LAMBDA_FUNCTION_NAME }}"
+
       - name: Deploy Lambda zip
-        run: |
-              aws lambda update-function-code `
-                --function-name "AuditAuditCount" `
-                --zip-file fileb://AuditLambda.zip `
-                --publish
+        run: aws lambda update-function-code --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" --zip-file fileb://AuditLambda.zip --publish
 
-      # -------------------------------------------------
-      # 1️⃣1️⃣ (Optional) Set / update the env var that tells the function
-      #      where the audit database lives.
-      # -------------------------------------------------
-      - name: Set AUDIT_DB_PATH env var (optional)
-        if: env.PACKAGE_DB == 'false'                # only run when DB is *not* zipped
-        run: |
-          aws lambda update-function-configuration `
-            --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" `
-            --environment "Variables={AUDIT_DB_PATH=/tmp/audit.db}"
-          # The above sets the variable so the Lambda looks for audit.db inside /tmp.
-          # If you store the DB in EFS, S3, or another location, adjust the path accordingly.
-
-      # -------------------------------------------------
-      # 1️⃣2️⃣ (Optional) If you want to upload the DB to S3 first and
-      #      reference that S3 path via the env var.
-      # -------------------------------------------------
-      - name: Upload audit.db to S3 (optional)
-        if: env.PACKAGE_DB == 'true'
-        run: |
-          aws s3 cp publish/audit.db s3://my-lambda-bucket/audit.db --sse aws:kms
-          # Then in the previous step set the env var to that S3 path, e.g.
-          # aws lambda update-function-configuration `
-          #   --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" `
-          #   --environment "Variables={AUDIT_DB_PATH=/opt/audit.db}"
-          # (You would later mount the EFS or use a side‑car that copies from S3 to /opt)
-
+      - name: Wait for Lambda code update
+        run: aws lambda wait function-updated --function-name "${{ env.LAMBDA_FUNCTION_NAME }}"
