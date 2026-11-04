@@ -57,7 +57,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-2' }}
 
       - name: Wait for existing Lambda update
         run: aws lambda wait function-updated --function-name "${{ env.LAMBDA_FUNCTION_NAME }}"
