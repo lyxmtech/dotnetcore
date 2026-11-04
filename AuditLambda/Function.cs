@@ -23,7 +23,7 @@ public class Function
     /// <param name="input">Ignored; kept for Lambda signature compatibility.</param>
     /// <param name="context">Ignored; kept for Lambda signature compatibility.</param>
     /// <returns>The total count of audit records.</returns>
-    public async Task<AuditCountResponse> FunctionHandlerAsync(object input, ILambdaContext context)
+    public async Task<AuditCountResponse> FunctionHandlerAsync(Stream input, ILambdaContext context)
     {
         // Read the database path from an environment variable; you can set this in the Lambda console
         // or in your serverless configuration.
