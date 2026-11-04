@@ -73,12 +73,7 @@ jobs:
       - name: Create deployment zip
         run: |
           cd publish
-          # If you packaged the DB, include it; otherwise the zip only has the dll.
-          if exist audit.db (
-            zip -r ../AuditLambda.zip *
-          ) else (
-            zip -r ../AuditLambda.zip *
-          )
+          zip -r ../AuditLambda.zip *
           cd ..
 
       # -------------------------------------------------
