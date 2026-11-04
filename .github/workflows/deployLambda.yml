@@ -72,9 +72,7 @@ jobs:
       # -------------------------------------------------
       - name: Create deployment zip
         run: |
-          cd publish
-          zip -r ../AuditLambda.zip *
-          cd ..
+          Compress-Archive -Path ./publish/* -DestinationPath ./AuditLambda.zip -Force
 
       # -------------------------------------------------
       # 8️⃣ Upload the zip as a workflow artifact (optional, for debugging)
