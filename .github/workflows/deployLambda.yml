@@ -1,11 +1,6 @@
 name: Deploy AuditLambda
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "AuditLambda/**"
-      - ".github/workflows/deployLambda.yml"
   workflow_dispatch:
 
 concurrency:
