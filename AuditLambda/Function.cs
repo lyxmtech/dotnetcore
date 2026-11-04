@@ -4,7 +4,7 @@ using Dapper;
 
 // The default Lambda serializer (source-generated) is used when the attribute is omitted.
 // If you prefer the System.Text.Json serializer, you can add the attribute back later.
-
+[assembly: LambdaSerializer(typeof(DefaultLambdaJsonSerializer))] // Add this line
 namespace AuditLambda;
 
 public class AuditCountResponse
@@ -23,6 +23,7 @@ public class Function
     /// <param name="input">Ignored; kept for Lambda signature compatibility.</param>
     /// <param name="context">Ignored; kept for Lambda signature compatibility.</param>
     /// <returns>The total count of audit records.</returns>
+    [LambdaSerializer(typeof(DefaultLambdaJsonSerializer))]
     public async Task<AuditCountResponse> FunctionHandlerAsync(Stream input, ILambdaContext context)
     {
         // Read the database path from an environment variable; you can set this in the Lambda console
