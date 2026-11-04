@@ -13,7 +13,7 @@ env:
   LAMBDA_FUNCTION_NAME: 'AuditAuditCount'   # name of the Lambda you created in AWS
   LAMBDA_RUNTIME: 'dotnet9'          # tells AWS the function is .NET 9 (custom runtime)
   # Path (relative to repo root) where the published dll lives
-  PROJECT_PATH: 'AuditAuditCount/AuditLambda'   # <-- adjust if you rename the folder
+  PROJECT_PATH: 'dotnetcore/AuditLambda'   # <-- adjust if you rename the folder
   # If you want the SQLite file packaged with the function, set this to true
   PACKAGE_DB: 'false'                # set to 'true' if you want audit.db in the zip
 
