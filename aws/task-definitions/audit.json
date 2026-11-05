@@ -1,16 +1,23 @@
 {
   "family": "dotnetcore-audit",
   "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE", "EC2"],
+  "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
-  "executionRoleArn": "arn:aws:iam::446453290297:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::446453290297:role/ecsTaskRole",
+  "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskRole",
   "containerDefinitions": [
     {
       "name": "audit",
       "image": "000000000000.dkr.ecr.us-east-2.amazonaws.com/dotnetcore-audit:latest",
       "essential": true,
+      "mountPoints": [
+        {
+          "sourceVolume": "audit-data",
+          "containerPath": "/data",
+          "readOnly": false
+        }
+      ],
       "portMappings": [
         { "containerPort": 8080, "protocol": "tcp" }
       ],
@@ -19,6 +26,7 @@
         { "name": "ASPNETCORE_ENVIRONMENT", "value": "Production" },
         { "name": "EventBus", "value": "SQS" },
         { "name": "Database__Path", "value": "/data/audit.db" },
+        { "name": "Database__JournalMode", "value": "DELETE" },
         { "name": "Sqs__Region", "value": "us-east-2" }
       ],
       "logConfiguration": {
@@ -28,6 +36,20 @@
           "awslogs-region": "us-east-2",
           "awslogs-stream-prefix": "ecs",
           "awslogs-create-group": "true"
+        }
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "audit-data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "EFS_FILE_SYSTEM_ID",
+        "rootDirectory": "/",
+        "transitEncryption": "ENABLED",
+        "authorizationConfig": {
+          "accessPointId": "EFS_ACCESS_POINT_ID",
+          "iam": "DISABLED"
         }
       }
     }
