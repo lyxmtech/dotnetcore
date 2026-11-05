@@ -15,6 +15,12 @@ public class DatabaseOptions
     public string Path { get; set; } = "db/app.db";
 
     /// <summary>
+    /// Journal mode used by SQLite. WAL is the default for local filesystems;
+    /// use DELETE for databases shared across hosts on a network filesystem.
+    /// </summary>
+    public string JournalMode { get; set; } = "WAL";
+
+    /// <summary>
     /// How long (seconds) SQLite waits for a competing writer before failing with
     /// SQLITE_BUSY. Only matters when several requests write concurrently.
     /// </summary>

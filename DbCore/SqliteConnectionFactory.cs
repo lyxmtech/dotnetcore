@@ -12,11 +12,19 @@ public class SqliteConnectionFactory : IDbConnectionFactory
 {
     private readonly string _connectionString;
     private readonly int _busyTimeoutSeconds;
+    private readonly string _journalMode;
 
     public SqliteConnectionFactory(IOptions<DatabaseOptions> options)
     {
         var opts = options.Value;
         _busyTimeoutSeconds = Math.Max(0, opts.BusyTimeoutSeconds);
+        _journalMode = opts.JournalMode.ToUpperInvariant() switch
+        {
+            "WAL" => "WAL",
+            "DELETE" => "DELETE",
+            _ => throw new InvalidOperationException(
+                $"Unsupported SQLite journal mode '{opts.JournalMode}'. Use 'WAL' or 'DELETE'.")
+        };
         _connectionString = BuildConnectionString(opts.Path);
     }
 
@@ -28,9 +36,7 @@ public class SqliteConnectionFactory : IDbConnectionFactory
         var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
 
-        // WAL lets readers work while a writer holds the lock; busy_timeout makes
-        // a concurrent writer wait instead of failing immediately with SQLITE_BUSY.
-        await ExecutePragmaAsync(connection, "PRAGMA journal_mode=WAL;", cancellationToken);
+        await ExecutePragmaAsync(connection, $"PRAGMA journal_mode={_journalMode};", cancellationToken);
         await ExecutePragmaAsync(connection, $"PRAGMA busy_timeout={_busyTimeoutSeconds * 1000};", cancellationToken);
         await ExecutePragmaAsync(connection, "PRAGMA foreign_keys=ON;", cancellationToken);
 
