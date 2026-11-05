@@ -21,7 +21,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-2                   # Your AWS region
-
+  YOUR_ACCOUNT_ID: 446453290297
 jobs:
   prepare:
     name: Prepare deploy matrix
@@ -66,7 +66,7 @@ jobs:
         env:
           AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
         run: |
-          if [[ -z "$AWS_ROLE_ARN" || "$AWS_ROLE_ARN" == *446453290297* ]]; then
+          if [[ -z "$AWS_ROLE_ARN" || "$AWS_ROLE_ARN" == *YOUR_ACCOUNT_ID* ]]; then
             echo "Set the AWS_ROLE_ARN repository variable to the IAM role ARN used by GitHub Actions." >&2
             exit 1
           fi
@@ -133,7 +133,7 @@ jobs:
             mv "${output}.tmp" "$output"
           fi
 
-          if jq -e '.. | strings | select(test("446453290297|EFS_FILE_SYSTEM_ID|EFS_ACCESS_POINT_ID|000000000000"))' "$output" >/dev/null; then
+          if jq -e '.. | strings | select(test("YOUR_ACCOUNT_ID|EFS_FILE_SYSTEM_ID|EFS_ACCESS_POINT_ID|000000000000"))' "$output" >/dev/null; then
             echo "Task definition still contains an unresolved AWS placeholder." >&2
             exit 1
           fi
