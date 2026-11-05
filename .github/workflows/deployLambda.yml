@@ -1,6 +1,11 @@
 name: Deploy AuditLambda
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "AuditLambda/**"
+      - ".github/workflows/deployLambda.yml"
   workflow_dispatch:
 
 concurrency:
@@ -13,6 +18,7 @@ env:
   LAMBDA_RUNTIME: dotnet10
   LAMBDA_HANDLER: AuditLambda::AuditLambda.Function::FunctionHandlerAsync
   PROJECT_PATH: AuditLambda/AuditLambda.csproj
+  AWS_REGION: us-east-2
 
 jobs:
   build-and-deploy:
@@ -52,13 +58,55 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION || 'us-east-2' }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Wait for existing Lambda update
         run: aws lambda wait function-updated --function-name "${{ env.LAMBDA_FUNCTION_NAME }}"
 
-      - name: Configure Lambda runtime and handler
-        run: aws lambda update-function-configuration --function-name "${{ env.LAMBDA_FUNCTION_NAME }}" --runtime "${{ env.LAMBDA_RUNTIME }}" --handler "${{ env.LAMBDA_HANDLER }}"
+      - name: Configure Lambda runtime, handler, VPC, and EFS
+        env:
+          EFS_FILE_SYSTEM_ID: ${{ vars.EFS_FILE_SYSTEM_ID }}
+          EFS_ACCESS_POINT_ID: ${{ vars.EFS_ACCESS_POINT_ID }}
+          LAMBDA_SUBNET_IDS: ${{ vars.LAMBDA_SUBNET_IDS }}
+          LAMBDA_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_SECURITY_GROUP_IDS }}
+        run: |
+          set -euo pipefail
+
+          for name in EFS_FILE_SYSTEM_ID EFS_ACCESS_POINT_ID LAMBDA_SUBNET_IDS LAMBDA_SECURITY_GROUP_IDS; do
+            if [[ -z "${!name}" ]]; then
+              echo "Set the $name repository variable before deploying AuditLambda." >&2
+              exit 1
+            fi
+          done
+
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          access_point_file_system_id="$(
+            aws efs describe-access-points \
+              --access-point-id "${EFS_ACCESS_POINT_ID}" \
+              --query 'AccessPoints[0].FileSystemId' \
+              --output text
+          )"
+          if [[ "$access_point_file_system_id" != "$EFS_FILE_SYSTEM_ID" ]]; then
+            echo "EFS_ACCESS_POINT_ID does not belong to EFS_FILE_SYSTEM_ID." >&2
+            exit 1
+          fi
+
+          access_point_arn="arn:aws:elasticfilesystem:${AWS_REGION}:${account_id}:access-point/${EFS_ACCESS_POINT_ID}"
+
+          aws lambda get-function-configuration \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --query 'Environment.Variables' \
+            --output json |
+            jq '(. // {}) + {"AUDIT_DB_PATH":"/mnt/audit/audit.db"} | {Variables:.}' \
+              > lambda-environment.json
+
+          aws lambda update-function-configuration \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --runtime "${LAMBDA_RUNTIME}" \
+            --handler "${LAMBDA_HANDLER}" \
+            --environment file://lambda-environment.json \
+            --file-system-configs "Arn=${access_point_arn},LocalMountPath=/mnt/audit" \
+            --vpc-config "SubnetIds=${LAMBDA_SUBNET_IDS},SecurityGroupIds=${LAMBDA_SECURITY_GROUP_IDS}"
 
       - name: Wait for Lambda configuration update
         run: aws lambda wait function-updated --function-name "${{ env.LAMBDA_FUNCTION_NAME }}"

@@ -1,7 +1,7 @@
 name: Deploy services to Amazon ECS
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:       # Manual runs from the GitHub Actions tab
     inputs:
       service:
         description: 'Service to deploy (all = every service)'
@@ -16,12 +16,11 @@ on:
           - notify
 
 permissions:
-  id-token: write
-  contents: read
+  id-token: write # Required for OIDC authentication
+  contents: read  # Required for checkout code
 
 env:
-  AWS_REGION: us-east-2
-  ECS_CLUSTER: dotnetcore-cluster   # moved here from hardcoded step
+  AWS_REGION: us-east-2                   # Your AWS region
 
 jobs:
   prepare:
@@ -57,22 +56,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-    # environment: production   # uncomment ONLY if you created this env in repo settings
+    environment: production # Optional: if you have configured a GitHub environment
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
-      - name: Show OIDC token claims
-        run: |
-          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
-           echo $TOKEN | cut -d '.' -f2 | base64 -d 2>/dev/null | jq .
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::446453290297:role/GitHubActionsECSRole  # ⚠️ REPLACE
+          role-to-assume: arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsECSRole # Replace with your IAM role ARN
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -90,11 +83,38 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+      - name: Prepare audit EFS task definition
+        id: prepare-task-definition
+        env:
+          EFS_FILE_SYSTEM_ID: ${{ vars.EFS_FILE_SYSTEM_ID }}
+          EFS_ACCESS_POINT_ID: ${{ vars.EFS_ACCESS_POINT_ID }}
+        run: |
+          task_definition="${{ matrix.service.task_definition }}"
+          output="${{ matrix.service.slug }}-task-definition.json"
+
+          if [[ "${{ matrix.service.slug }}" == "audit" ]]; then
+            if [[ -z "$EFS_FILE_SYSTEM_ID" || -z "$EFS_ACCESS_POINT_ID" ]]; then
+              echo "Set the EFS_FILE_SYSTEM_ID and EFS_ACCESS_POINT_ID repository variables before deploying AuditService." >&2
+              exit 1
+            fi
+
+            jq --arg fileSystemId "$EFS_FILE_SYSTEM_ID" \
+              --arg accessPointId "$EFS_ACCESS_POINT_ID" \
+              '(.volumes[] | select(.name == "audit-data").efsVolumeConfiguration) |=
+                (.fileSystemId = $fileSystemId |
+                 .authorizationConfig.accessPointId = $accessPointId)' \
+              "$task_definition" > "$output"
+          else
+            cp "$task_definition" "$output"
+          fi
+
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
       - name: Fill in the new image ID in the Amazon ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ${{ matrix.service.task_definition }}
+          task-definition: ${{ steps.prepare-task-definition.outputs.path }}
           container-name: ${{ matrix.service.container_name }}
           image: ${{ steps.build-image.outputs.image }}
 
@@ -103,5 +123,5 @@ jobs:
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ matrix.service.ecs_service }}
-          cluster: ${{ env.ECS_CLUSTER }}
+          cluster: dotnetcore-cluster
           wait-for-service-stability: true
