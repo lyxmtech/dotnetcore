@@ -62,10 +62,19 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Validate AWS role configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+        run: |
+          if [[ -z "$AWS_ROLE_ARN" || "$AWS_ROLE_ARN" == *YOUR_ACCOUNT_ID* ]]; then
+            echo "Set the AWS_ROLE_ARN repository variable to the IAM role ARN used by GitHub Actions." >&2
+            exit 1
+          fi
+
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::446453290297:role/GitHubActionsECSRole # Replace with your IAM role ARN
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -83,14 +92,31 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Prepare audit EFS task definition
+      - name: Prepare ECS task definition
         id: prepare-task-definition
         env:
+          ECS_TASK_EXECUTION_ROLE_ARN: ${{ vars.ECS_TASK_EXECUTION_ROLE_ARN }}
+          ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
           EFS_FILE_SYSTEM_ID: ${{ vars.EFS_FILE_SYSTEM_ID }}
           EFS_ACCESS_POINT_ID: ${{ vars.EFS_ACCESS_POINT_ID }}
         run: |
+          set -euo pipefail
+
+          for name in ECS_TASK_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN; do
+            value="${!name}"
+            if [[ -z "$value" || "$value" != arn:aws:iam::*:role/* ]]; then
+              echo "Set $name to a valid IAM role ARN in the GitHub repository variables." >&2
+              exit 1
+            fi
+          done
+
           task_definition="${{ matrix.service.task_definition }}"
           output="${{ matrix.service.slug }}-task-definition.json"
+          jq \
+            --arg executionRoleArn "$ECS_TASK_EXECUTION_ROLE_ARN" \
+            --arg taskRoleArn "$ECS_TASK_ROLE_ARN" \
+            '.executionRoleArn = $executionRoleArn | .taskRoleArn = $taskRoleArn' \
+            "$task_definition" > "$output"
 
           if [[ "${{ matrix.service.slug }}" == "audit" ]]; then
             if [[ -z "$EFS_FILE_SYSTEM_ID" || -z "$EFS_ACCESS_POINT_ID" ]]; then
@@ -103,9 +129,13 @@ jobs:
               '(.volumes[] | select(.name == "audit-data").efsVolumeConfiguration) |=
                 (.fileSystemId = $fileSystemId |
                  .authorizationConfig.accessPointId = $accessPointId)' \
-              "$task_definition" > "$output"
-          else
-            cp "$task_definition" "$output"
+              "$output" > "${output}.tmp"
+            mv "${output}.tmp" "$output"
+          fi
+
+          if jq -e '.. | strings | select(test("YOUR_ACCOUNT_ID|EFS_FILE_SYSTEM_ID|EFS_ACCESS_POINT_ID|000000000000"))' "$output" >/dev/null; then
+            echo "Task definition still contains an unresolved AWS placeholder." >&2
+            exit 1
           fi
 
           echo "path=$output" >> "$GITHUB_OUTPUT"
